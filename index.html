@@ -108,9 +108,38 @@ a { color:var(--gold); }
 
 <script>
 const INF = 999;
-const ITEMS_KEY = "items-v2";
+const ITEMS_KEY = "items-v3";
 const CONFIG_KEY = "sheet-config-v2";
 const HIERARCHY_KEY = "hierarchy-v1";
+
+// Hoje = 17/07/2026 → mês 1 do horizonte é Ago/2026
+const ANCHOR_YEAR = 2026, ANCHOR_MONTH0 = 7; // 0-indexado: Ago = 7
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function monthLabel(m) {
+  const am = ANCHOR_MONTH0 + (m - 1);
+  const year = ANCHOR_YEAR + Math.floor(am / 12);
+  const month = ((am % 12) + 12) % 12;
+  return `${MESES_PT[month]}/${String(year).slice(2)}`;
+}
+function yearLabel(ano) {
+  const start = (ano - 1) * 12 + 1, end = ano * 12;
+  return `${monthLabel(start)}–${monthLabel(end)}`;
+}
+// "2026-08" -> índice de mês (1 = Ago/2026)
+function isoToM(iso) {
+  if (!iso) return 1;
+  const [y, mo] = iso.split('-').map(Number);
+  const am = (y - ANCHOR_YEAR) * 12 + (mo - 1);
+  return am - ANCHOR_MONTH0 + 1;
+}
+// índice de mês -> "2026-08"
+function mToIso(m) {
+  const am = ANCHOR_MONTH0 + (m - 1);
+  const year = ANCHOR_YEAR + Math.floor(am / 12);
+  const month0 = ((am % 12) + 12) % 12;
+  return `${year}-${String(month0 + 1).padStart(2,'0')}`;
+}
+const HOJE_ISO = mToIso(1);
 
 const DEFAULT_HIERARCHY = {
   "Receita": ["Bruno","Samiah"],
@@ -124,42 +153,50 @@ let TOP_CATS = [];
 
 function seedItems() {
   const rows = []; let id = 1;
-  const add = (categoria, subcategoria, titular, descricao, valor, mesesRestantes, obs) =>
-    rows.push({ id: id++, categoria, subcategoria, titular, descricao, valor, mesesRestantes, obs: obs||"" });
-  add("Receita","Bruno","Bruno","Salário Bruno",20777.22,INF,"Receita bruta");
-  add("Receita","Samiah","Samiah","Salário/Pró-labore Samiah",20284.00,INF,"Receita bruta");
+  const add = (categoria, subcategoria, titular, descricao, valor, dataInicio, duracaoMeses, obs) =>
+    rows.push({ id: id++, categoria, subcategoria, titular, descricao, valor, dataInicio, duracaoMeses, obs: obs||"" });
+
+  add("Receita","Bruno","Bruno","Salário Bruno",20777.22,HOJE_ISO,INF,"Receita bruta");
+  add("Receita","Samiah","Samiah","Salário/Pró-labore Samiah",20284.00,HOJE_ISO,INF,"Receita bruta");
   [["Moradia","Condomínio",1000],["Moradia","IPTU",390],["Utilidades","Energia",160],
    ["Utilidades","Água",150],["Utilidades","Gás",80],["Utilidades","Vivo (internet + celular)",400],
    ["Saúde","Dentista filha",240],["Transporte","Sem Parar",80],["Transporte","Estacionamento Samiah",260],
    ["Lazer/Bem-estar","Flow Academia",250],["Lazer/Bem-estar","Vinhos",400],["Lazer/Bem-estar","Jazz",180]
-  ].forEach(([sub,n,v]) => add("Despesas Fixas",sub,"Família",n,v,INF));
-  add("Impostos","Bruno","Bruno","INSS",951.62,INF);
-  add("Impostos","Bruno","Bruno","IRPF",4439.04,INF);
-  add("Impostos","Bruno","Bruno","Seguro de vida",84.40,INF);
-  add("Impostos","Samiah (PJ)","Samiah","INSS (PJ)",502.51,INF);
-  add("Impostos","Samiah (PJ)","Samiah","DAS (PJ)",1128.50,INF);
+  ].forEach(([sub,n,v]) => add("Despesas Fixas",sub,"Família",n,v,HOJE_ISO,INF));
+  add("Impostos","Bruno","Bruno","INSS",951.62,HOJE_ISO,INF);
+  add("Impostos","Bruno","Bruno","IRPF",4439.04,HOJE_ISO,INF);
+  add("Impostos","Bruno","Bruno","Seguro de vida",84.40,HOJE_ISO,INF);
+  add("Impostos","Samiah (PJ)","Samiah","INSS (PJ)",502.51,HOJE_ISO,INF);
+  add("Impostos","Samiah (PJ)","Samiah","DAS (PJ)",1128.50,HOJE_ISO,INF);
   [["Apple (iCloud)",9.99],["Terra Brasil",57.42],["Amazon Prime Canais",29.90],
    ["Amazon Prime (membership)",19.90],["Anthropic Claude (+IOF)",113.85],
    ["Netflix",44.90],["JusBrasil",58.90],["Globoplay",27.90]
-  ].forEach(([n,v]) => add("Cartão de Crédito","Assinaturas","Bruno",n,v,INF,"Cartão Bradesco"));
+  ].forEach(([n,v]) => add("Cartão de Crédito","Assinaturas","Bruno",n,v,HOJE_ISO,INF,"Cartão Bradesco"));
   [["ChatGPT / OpenAI",107.60],["Disney Plus",26.50],["Leiturinha",53.60]
-  ].forEach(([n,v]) => add("Cartão de Crédito","Assinaturas","Samiah",n,v,INF,"Cartão Bradesco"));
-  [["Amazon Diego Pereira",39.95,1],["Amazon Topsystem",132.31,10],["Amazon CPI (Amazon BR)",36.38,10],
-   ["Ophicinales Farmácia",85.29,3],["Bradesco Auto (seguro)",91.99,7],["Armário Sophie",144.21,6],
-   ["Surfco",53.94,1],["Zeiss Vinhedo (óculos)",444.66,2],["Zurich Seguros",182.29,7],
-   ["HTM Lancheira Juju",19.66,6],["International School",166.61,6],["Assiny Katon Tecnologia",38.16,4],
-   ["Globoplay (parcelado)",44.90,5],["Joli",90.84,4],["EC Novohorizonte",52.60,1],
-   ["Mercado Livre AT",22.43,2],["Mercado Livre TI",133.10,2]
-  ].forEach(([n,v,r]) => add("Cartão de Crédito","Parcelamentos","Bruno",n,v,r,"Cartão Bradesco"));
-  [["Jim.com Zuiani Medici",883.35,5],["ZP Mundo 29071",207.92,2]
-  ].forEach(([n,v,r]) => add("Cartão de Crédito","Parcelamentos","Samiah",n,v,r,"Cartão Bradesco"));
-  add("Cartão de Crédito","Compras Variáveis","Bruno","Compras avulsas (gasolina, mercado, restaurante)",3107.48,INF,"Estimativa flat");
-  add("Cartão de Crédito","Compras Variáveis","Samiah","Compras avulsas (residual não identificado)",6189.92,INF,"Estimativa flat");
-  add("Cartão de Crédito","Compras Variáveis","Nubank (a definir)","Fatura Nubank (sem detalhamento)",7000.00,INF,"Sem discriminação");
-  add("Empréstimos","Veículo","Bruno","Honda City 2024 — Santander/Aymoré",2194.82,32,"48 parcelas, 16 pagas, 1,54% a.m.");
-  add("Empréstimos","Imóvel","Bruno","Financiamento imobiliário",4166.73,INF,"Saldo devedor R$ 331.970,75");
-  add("Empréstimos","Previbosch","Bruno","Empréstimo Previbosch",2033.78,32,"36 parcelas, 4 pagas, 1,10% a.m.");
-  add("Empréstimos","Pronampe","Bruno","Empréstimo Pronampe",3128.74,29,"42 parcelas, 13 pagas");
+  ].forEach(([n,v]) => add("Cartão de Crédito","Assinaturas","Samiah",n,v,HOJE_ISO,INF,"Cartão Bradesco"));
+
+  // Parcelamentos: datas reais de início derivadas das faturas
+  [["Amazon Diego Pereira",39.95,"2026-07",2],["Amazon Topsystem",132.31,"2026-06",12],
+   ["Amazon CPI (Amazon BR)",36.38,"2026-06",12],["Ophicinales Farmácia",85.29,"2026-05",6],
+   ["Bradesco Auto (seguro)",91.99,"2026-05",10],["Armário Sophie",144.21,"2026-04",10],
+   ["Surfco",53.94,"2026-04",5],["Zeiss Vinhedo (óculos)",444.66,"2026-04",6],
+   ["Zurich Seguros",182.29,"2026-03",12],["HTM Lancheira Juju",19.66,"2026-02",12],
+   ["International School",166.61,"2026-02",12],["Assiny Katon Tecnologia",38.16,"2026-02",10],
+   ["Globoplay (parcelado)",44.90,"2026-01",12],["Joli",90.84,"2026-02",10],
+   ["EC Novohorizonte",52.60,"2026-01",8],["Mercado Livre AT",22.43,"2026-07",3],
+   ["Mercado Livre TI",133.10,"2026-07",3]
+  ].forEach(([n,v,ini,dur]) => add("Cartão de Crédito","Parcelamentos","Bruno",n,v,ini,dur,"Cartão Bradesco"));
+  [["Jim.com Zuiani Medici",883.35,"2026-07",6],["ZP Mundo 29071",207.92,"2026-07",3]
+  ].forEach(([n,v,ini,dur]) => add("Cartão de Crédito","Parcelamentos","Samiah",n,v,ini,dur,"Cartão Bradesco"));
+
+  add("Cartão de Crédito","Compras Variáveis","Bruno","Compras avulsas (gasolina, mercado, restaurante)",3107.48,HOJE_ISO,INF,"Estimativa flat");
+  add("Cartão de Crédito","Compras Variáveis","Samiah","Compras avulsas (residual não identificado)",6189.92,HOJE_ISO,INF,"Estimativa flat");
+  add("Cartão de Crédito","Compras Variáveis","Nubank (a definir)","Fatura Nubank (sem detalhamento)",7000.00,HOJE_ISO,INF,"Sem discriminação");
+
+  add("Empréstimos","Veículo","Bruno","Honda City 2024 — Santander/Aymoré",2194.82,"2025-04",48,"48 parcelas, 1,54% a.m. — 1º vencimento real 14/04/2025");
+  add("Empréstimos","Imóvel","Bruno","Financiamento imobiliário",4166.73,"2012-02",360,"Saldo devedor R$ 331.970,75; início estimado a partir de 174 parcelas já pagas");
+  add("Empréstimos","Previbosch","Bruno","Empréstimo Previbosch",2033.78,"2026-04",36,"36 parcelas, 1,10% a.m.");
+  add("Empréstimos","Pronampe","Bruno","Empréstimo Pronampe",3128.74,"2025-07",42,"42 parcelas");
   return rows;
 }
 
@@ -196,6 +233,16 @@ function parseValor(raw) {
   const v = parseFloat(s);
   return isNaN(v) ? (parseFloat(raw)||0) : v;
 }
+function normalizeDataInicio(raw) {
+  if (!raw) return HOJE_ISO;
+  const s = raw.toString().trim();
+  const m1 = s.match(/^(\d{4})-(\d{2})/); if (m1) return `${m1[1]}-${m1[2]}`;
+  const m2 = s.match(/^(\d{1,2})\/(\d{4})/); if (m2) return `${m2[2]}-${m2[1].padStart(2,'0')}`; // dd/mm/yyyy ou mm/yyyy
+  const d = new Date(s);
+  if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  return HOJE_ISO;
+}
+
 function csvToItems(text) {
   const rows = parseCSV(text);
   if (!rows.length) return [];
@@ -204,7 +251,8 @@ function csvToItems(text) {
   const iId = idx(['id']), iCat = idx(['categoria']), iSub = idx(['subcategoria']),
         iTit = idx(['titular']), iDesc = idx(['descrição','descricao']),
         iVal = idx(['valor mensal (r$)','valor mensal','valor']),
-        iRest = idx(['meses restantes']), iObs = idx(['observação','observacao']);
+        iIni = idx(['data início','data inicio']), iDur = idx(['duração (meses)','duracao (meses)','duração','duracao']),
+        iObs = idx(['observação','observacao']);
   const items = [];
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
@@ -216,7 +264,8 @@ function csvToItems(text) {
       titular: iTit>=0 ? (row[iTit]||'').trim() : '',
       descricao: iDesc>=0 ? (row[iDesc]||'').trim() : '',
       valor: parseValor(row[iVal]),
-      mesesRestantes: iRest>=0 ? (parseInt(row[iRest])||INF) : INF,
+      dataInicio: iIni>=0 ? normalizeDataInicio(row[iIni]) : HOJE_ISO,
+      duracaoMeses: iDur>=0 ? (parseInt(row[iDur])||INF) : INF,
       obs: iObs>=0 ? (row[iObs]||'').trim() : ''
     });
   }
@@ -230,7 +279,8 @@ function jsonRowsToItems(rows) {
     titular: r['Titular'] || '',
     descricao: r['Descrição'] || r['Descricao'] || '',
     valor: parseValor(r['Valor Mensal (R$)']),
-    mesesRestantes: Number(r['Meses Restantes']) || INF,
+    dataInicio: normalizeDataInicio(r['Data Início'] || r['Data Inicio']),
+    duracaoMeses: Number(r['Duração (Meses)'] || r['Duracao (Meses)']) || INF,
     obs: r['Observação'] || r['Observacao'] || ''
   }));
 }
@@ -303,7 +353,11 @@ async function trySync() {
   return false;
 }
 
-function valueInMonth(item, m) { return item.mesesRestantes >= m ? item.valor : 0; }
+function valueInMonth(item, m) {
+  const start = isoToM(item.dataInicio);
+  if (item.duracaoMeses >= INF) return m >= start ? item.valor : 0;
+  return (m >= start && m < start + item.duracaoMeses) ? item.valor : 0;
+}
 function itemsOf(cat, sub) { return ITEMS.filter(i => i.categoria===cat && (sub===undefined || i.subcategoria===sub)); }
 function catTotal(cat, m) { return itemsOf(cat).reduce((s,i)=>s+valueInMonth(i,m),0); }
 function subTotal(cat, sub, m) { return itemsOf(cat,sub).reduce((s,i)=>s+valueInMonth(i,m),0); }
@@ -360,13 +414,13 @@ function renderGeral() {
   }));
   el.innerHTML = `
     <div class="kpi-row">
-      <div class="kpi"><div class="label">Receita (mês 1)</div><div class="value good">${fmt0(s1.receita)}</div></div>
-      <div class="kpi"><div class="label">Total Saídas (mês 1)</div><div class="value">${fmt0(s1.saidas)}</div></div>
-      <div class="kpi"><div class="label">Saldo (mês 1)</div><div class="value ${s1.saldo<0?'bad':'good'}">${fmt0(s1.saldo)}</div></div>
+      <div class="kpi"><div class="label">Receita (${monthLabel(1)})</div><div class="value good">${fmt0(s1.receita)}</div></div>
+      <div class="kpi"><div class="label">Total Saídas (${monthLabel(1)})</div><div class="value">${fmt0(s1.saidas)}</div></div>
+      <div class="kpi"><div class="label">Saldo (${monthLabel(1)})</div><div class="value ${s1.saldo<0?'bad':'good'}">${fmt0(s1.saldo)}</div></div>
       <div class="kpi"><div class="label">Comprometimento</div><div class="value">${s1.receita?((s1.saidas/s1.receita)*100).toFixed(1):'0'}%</div></div>
     </div>
     <div class="panel">
-      <div class="peyebrow">Mês 1 · resumo por categoria</div>
+      <div class="peyebrow">${monthLabel(1)} · resumo por categoria</div>
       <h3>Fluxo do mês</h3>
       <div class="ledger-row"><span class="lbl b">Receita bruta total</span><span class="dots"></span><span class="val b" style="color:#6FAE8B">${fmt(s1.receita)}</span></div>
       <div class="ledger-row"><span class="lbl">Impostos</span><span class="dots"></span><span class="val">-${fmt(s1.impostos)}</span></div>
@@ -378,16 +432,20 @@ function renderGeral() {
     </div>
     <div class="panel">
       <div class="peyebrow">Drill-down</div>
-      <h3>Categoria &gt; Subcategoria (mês 1)</h3>
+      <h3>Categoria &gt; Subcategoria (${monthLabel(1)})</h3>
       <div class="tablewrap"><table><thead><tr><th class="l">Categoria</th><th class="l">Subcategoria</th><th>Valor</th></tr></thead><tbody>${subRows}</tbody></table></div>
     </div>
   `;
 }
 
 function canEdit() { return CONFIG.mode === 'local' || CONFIG.mode === 'script-readwrite'; }
-
 function categorySelectOptions(selected) {
   return TOP_CATS.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}${isIncomeCat(c)?' (receita)':''}</option>`).join('');
+}
+function fimLabel(item) {
+  const start = isoToM(item.dataInicio);
+  if (item.duracaoMeses >= INF) return 'sempre';
+  return monthLabel(start + item.duracaoMeses - 1);
 }
 
 function renderItens() {
@@ -404,15 +462,16 @@ function renderItens() {
     html += `<div class="panel">
       <div class="cat-title"><span class="name">${cat} <span style="color:var(--text-faint);font-weight:400;">&gt; ${sub}</span></span><span class="badge ${isIncomeCat(cat)?'income':''}">${fmt(total)}/mês</span></div>
       <div class="tablewrap"><table>
-        <thead><tr><th class="l">Descrição</th><th class="l">Titular</th><th>Valor (R$)</th><th>Meses Rest.</th>${editable?'<th></th>':''}</tr></thead>
+        <thead><tr><th class="l">Descrição</th><th class="l">Titular</th><th>Valor (R$)</th><th>Início</th><th>Duração</th>${editable?'<th></th>':''}</tr></thead>
         <tbody>${its.map(i => !editable ? `
-          <tr><td class="l">${esc(i.descricao)}</td><td class="l">${esc(i.titular)}</td><td>${fmt(i.valor)}</td><td>${i.mesesRestantes>=INF?'—':i.mesesRestantes}</td></tr>
+          <tr><td class="l">${esc(i.descricao)}</td><td class="l">${esc(i.titular)}</td><td>${fmt(i.valor)}</td><td>${monthLabel(isoToM(i.dataInicio))}</td><td>${i.duracaoMeses>=INF?'sempre':i.duracaoMeses+'x até '+fimLabel(i)}</td></tr>
         ` : `
           <tr class="item-row" data-id="${i.id}">
             <td class="l"><input type="text" value="${esc(i.descricao)}" data-field="descricao"></td>
-            <td class="l"><input type="text" value="${esc(i.titular)}" data-field="titular" style="width:80px"></td>
-            <td><input type="number" step="0.01" value="${i.valor}" data-field="valor" style="width:85px;text-align:right"></td>
-            <td><input type="number" value="${i.mesesRestantes}" data-field="mesesRestantes" style="width:55px;text-align:center"></td>
+            <td class="l"><input type="text" value="${esc(i.titular)}" data-field="titular" style="width:75px"></td>
+            <td><input type="number" step="0.01" value="${i.valor}" data-field="valor" style="width:80px;text-align:right"></td>
+            <td><input type="month" value="${i.dataInicio}" data-field="dataInicio" style="width:110px"></td>
+            <td><input type="number" value="${i.duracaoMeses}" data-field="duracaoMeses" style="width:55px;text-align:center" title="999 = sempre"></td>
             <td><button class="btn danger" data-del="${i.id}">remover</button></td>
           </tr>`).join('')}
         </tbody>
@@ -434,9 +493,11 @@ function renderItens() {
         <div class="field"><label>Titular</label><input type="text" id="new-titular" placeholder="Bruno / Samiah / Família"></div>
         <div class="field" style="grid-column: span 3;"><label>Descrição</label><input type="text" id="new-descricao" placeholder="Ex: Plano de saúde"></div>
         <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="new-valor" placeholder="0,00"></div>
-        <div class="field"><label>Meses restantes</label><input type="number" id="new-meses" value="999" title="999 = sempre"></div>
+        <div class="field"><label>Data (mês/ano)</label><input type="month" id="new-data" value="${HOJE_ISO}"></div>
+        <div class="field"><label>Duração (meses)</label><input type="number" id="new-duracao" value="999" title="999 = sempre · 1 = lançamento único"></div>
       </div>
       <div style="margin-top:10px;"><button class="btn" id="btn-add">+ Adicionar</button> <span class="saved-note" id="save-note"></span></div>
+      <p style="font-size:11px;color:var(--text-faint);margin-top:8px;">"Data" é quando a despesa/receita começou ou vai começar. "Duração" é por quantos meses ela se repete a partir dali — use 1 para algo que acontece só uma vez, ou 999 para algo recorrente sem previsão de fim.</p>
     </div>`;
   }
   el.innerHTML = html;
@@ -462,7 +523,7 @@ function renderItens() {
     inp.addEventListener('change', async (e) => {
       const row = e.target.closest('.item-row'); const id = parseInt(row.dataset.id);
       const field = e.target.dataset.field; const item = ITEMS.find(i=>i.id===id); if (!item) return;
-      item[field] = (field==='valor'||field==='mesesRestantes') ? (parseFloat(e.target.value)||0) : e.target.value;
+      item[field] = (field==='valor'||field==='duracaoMeses') ? (parseFloat(e.target.value)||0) : e.target.value;
       await persistChange('update', item);
     });
   });
@@ -479,9 +540,10 @@ function renderItens() {
     const titular = document.getElementById('new-titular').value || 'Família';
     const descricao = document.getElementById('new-descricao').value || '(sem descrição)';
     const valor = parseFloat(document.getElementById('new-valor').value) || 0;
-    const mesesRestantes = parseInt(document.getElementById('new-meses').value) || INF;
+    const dataInicio = document.getElementById('new-data').value || HOJE_ISO;
+    const duracaoMeses = parseInt(document.getElementById('new-duracao').value) || INF;
     const localId = ITEMS.length ? Math.max(...ITEMS.map(i=>i.id))+1 : 1;
-    const item = { id: localId, categoria, subcategoria, titular, descricao, valor, mesesRestantes, obs:'Adicionado pelo painel' };
+    const item = { id: localId, categoria, subcategoria, titular, descricao, valor, dataInicio, duracaoMeses, obs:'Adicionado pelo painel' };
     ITEMS.push(item);
     await persistChange('add', item);
     ['new-titular','new-descricao','new-valor'].forEach(id => document.getElementById(id).value = '');
@@ -532,7 +594,6 @@ function renderCategorias() {
       <div class="field"><label>É receita?</label><select id="new-cat-income"><option value="nao">Não (despesa)</option><option value="sim">Sim (receita)</option></select></div>
     </div>
     <div style="margin-top:10px;"><button class="btn" id="btn-add-cat">+ Criar categoria</button> <span class="saved-note" id="save-note-cat"></span></div>
-    <p style="font-size:11px;color:var(--text-faint);margin-top:8px;">Categorias marcadas "receita" entram no cálculo da Receita Total (o nome precisa conter a palavra "Receita", isso é feito automaticamente).</p>
   </div>`;
   html += `<div class="panel">
     <div class="peyebrow">Nova subcategoria</div>
@@ -574,13 +635,13 @@ function renderMensal() {
   const el = document.getElementById('view-mensal');
   const years=[1,2,3,4,5];
   el.innerHTML = `<div class="panel">
-    <div class="peyebrow">Selecione o ano</div>
-    <div class="year-btns">${years.map(y=>`<div class="year-btn ${y===activeYear?'active':''}" data-year="${y}">Ano ${y}</div>`).join('')}</div>
+    <div class="peyebrow">Selecione o período</div>
+    <div class="year-btns">${years.map(y=>`<div class="year-btn ${y===activeYear?'active':''}" data-year="${y}">${yearLabel(y)}</div>`).join('')}</div>
     <div class="tablewrap"><table>
       <thead><tr><th class="l">Mês</th><th>Receita</th><th>Desp. Fixas</th><th>Impostos</th><th>Cartões</th><th>Empréstimos</th><th>Saldo</th></tr></thead>
       <tbody>${Array.from({length:12},(_,i)=>((activeYear-1)*12)+i+1).map(m=>{
         const s=monthSnapshot(m);
-        return `<tr><td class="l">M${m}</td><td>${fmt0(s.receita)}</td><td>${fmt0(s.despesasFixas)}</td><td>${fmt0(s.impostos)}</td><td>${fmt0(s.cartoes)}</td><td>${fmt0(s.emprestimos)}</td><td class="bold" style="color:${s.saldo<0?'#D9714E':'#6FAE8B'} !important">${fmt0(s.saldo)}</td></tr>`;
+        return `<tr><td class="l">${monthLabel(m)}</td><td>${fmt0(s.receita)}</td><td>${fmt0(s.despesasFixas)}</td><td>${fmt0(s.impostos)}</td><td>${fmt0(s.cartoes)}</td><td>${fmt0(s.emprestimos)}</td><td class="bold" style="color:${s.saldo<0?'#D9714E':'#6FAE8B'} !important">${fmt0(s.saldo)}</td></tr>`;
       }).join('')}</tbody>
     </table></div>
   </div>`;
@@ -593,8 +654,8 @@ function renderAnual() {
   const rows=[['Receita Total','receita'],['Despesas Fixas','despesasFixas'],['Impostos','impostos'],
     ['Total Cartão de Crédito','cartoes'],['Total Empréstimos','emprestimos'],['Total Saídas','saidas'],['Saldo do Ano','saldo']];
   let html = `<div class="panel">
-    <div class="peyebrow">5 anos</div><h3>Resumo por categoria</h3>
-    <div class="tablewrap"><table><thead><tr><th class="l">Categoria</th>${years.map(y=>`<th>Ano ${y.ano}</th>`).join('')}<th>Δ 1→5</th></tr></thead>
+    <div class="peyebrow">${yearLabel(1)} a ${yearLabel(5)}</div><h3>Resumo por categoria</h3>
+    <div class="tablewrap"><table><thead><tr><th class="l">Categoria</th>${years.map(y=>`<th>${yearLabel(y.ano)}</th>`).join('')}<th>Δ ${monthLabel(1)}→${monthLabel(60)}</th></tr></thead>
     <tbody>${rows.map(([label,key])=>{
       const bold = ['Total Saídas','Saldo do Ano','Receita Total'].includes(label);
       const delta = years[4][key]-years[0][key];
@@ -605,7 +666,7 @@ function renderAnual() {
     const subs = HIERARCHY[cat]||[];
     if (!subs.length) return;
     html += `<div class="panel"><h3>${cat} — subcategorias</h3><div class="tablewrap"><table>
-      <thead><tr><th class="l">Subcategoria</th>${[1,2,3,4,5].map(a=>`<th>Ano ${a}</th>`).join('')}<th>Δ 1→5</th></tr></thead>
+      <thead><tr><th class="l">Subcategoria</th>${[1,2,3,4,5].map(a=>`<th>${yearLabel(a)}</th>`).join('')}<th>Δ</th></tr></thead>
       <tbody>${subs.map(sub=>{
         const vals=[1,2,3,4,5].map(a=>subYearTotal(cat,sub,a));
         const delta=vals[4]-vals[0];
@@ -701,7 +762,7 @@ document.querySelectorAll('.tab').forEach(t => {
   }
   await mergeItemsIntoHierarchy();
   document.getElementById('loading').style.display = 'none';
-  document.getElementById('view-geral').style.display = 'flex';
+  document.getElementById('view-geral').style.display = '';
   renderAll();
 })();
 </script>
